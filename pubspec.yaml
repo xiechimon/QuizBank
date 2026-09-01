@@ -1,0 +1,36 @@
+name: quiz_bank
+description: "QuizBank Flutter M3 rebuild of iOS 1170 questions + 17 modules"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^3.4.2
+  drift: ^2.24.1
+  sqlite3_flutter_libs: ^0.6.0+eol
+  sqlite3: ^3.5.2
+  shared_preferences: ^2.5.3
+  fl_chart: ^1.2.0
+  flutter_markdown_plus: ^1.0.1
+  flutter_tts: ^4.2.3
+  dio: ^5.8.1
+  crypto: ^3.0.6
+  path: ^1.9.1
+  path_provider: ^2.1.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  build_runner: ^2.7.0
+  drift_dev: ^2.34.5
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/data/questions.json
+    - assets/data/study_notes.json
