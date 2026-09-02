@@ -212,10 +212,14 @@ void main(){
       expect(cfg.maskedKeySync, AIConfig.maskKey('sk-test-key-1234567890'));
       expect(cfg.maskedKeySync, 'sk-t****7890');
       await cfg.setApiKey('');
-      // 清空后两者皆空（embedded为空）→ 未配置
       AIConfig.setTestEnvOverride(null);
-      expect(await cfg.maskedKey, '**** 未配置');
-      expect(cfg.maskedKeySync, '**** 未配置');
+      if (AIConfig.embeddedFallbackKey.isNotEmpty) {
+        expect(await cfg.maskedKey, AIConfig.maskKey(AIConfig.embeddedFallbackKey));
+        expect(cfg.maskedKeySync, AIConfig.maskKey(AIConfig.embeddedFallbackKey));
+      } else {
+        expect(await cfg.maskedKey, '**** 未配置');
+        expect(cfg.maskedKeySync, '**** 未配置');
+      }
     });
 
     test('Key 链路 C: SharedPreferences ai.opencode.key 优先于 dart-define', () async {
@@ -260,13 +264,20 @@ void main(){
       SharedPreferences.setMockInitialValues({});
       await cfg.resetAll();
       AIConfig.setTestEnvOverride(null);
-      // embeddedFallback 为空，两者皆空应为 null 且 isConfigured=false，直接走 Placeholder 不发网
       final key = await cfg.apiKey;
-      expect(key, isNull);
-      expect(cfg.apiKeySync, isNull);
-      expect(cfg.isConfiguredSync, isFalse);
-      expect(await cfg.isConfigured, isFalse);
-      expect(AIConfig.maskKey(key), '**** 未配置');
+      if (AIConfig.embeddedFallbackKey.isNotEmpty) {
+        expect(key, AIConfig.embeddedFallbackKey);
+        expect(cfg.apiKeySync, AIConfig.embeddedFallbackKey);
+        expect(cfg.isConfiguredSync, isTrue);
+        expect(await cfg.isConfigured, isTrue);
+        expect(AIConfig.maskKey(key), AIConfig.maskKey(AIConfig.embeddedFallbackKey));
+      } else {
+        expect(key, isNull);
+        expect(cfg.apiKeySync, isNull);
+        expect(cfg.isConfiguredSync, isFalse);
+        expect(await cfg.isConfigured, isFalse);
+        expect(AIConfig.maskKey(key), '**** 未配置');
+      }
     });
 
     test('旧 key ai.apiKey 不被使用，统一 ai.opencode.*', () async {
@@ -275,7 +286,11 @@ void main(){
       AIConfig.setTestEnvOverride(null);
       final key = await AIConfig.instance.apiKey;
       expect(key, isNot('sk-old-key-should-not-use'));
-      expect(key, isNull);
+      if (AIConfig.embeddedFallbackKey.isNotEmpty) {
+        expect(key, AIConfig.embeddedFallbackKey);
+      } else {
+        expect(key, isNull);
+      }
     });
 
     test('baseURL/model 持久化与默认值', () async {
@@ -305,7 +320,11 @@ void main(){
       expect(await cfg.apiKey, 'sk-trimmed');
       await cfg.setApiKey('   ');
       AIConfig.setTestEnvOverride(null);
-      expect(await cfg.apiKey, isNull);
+      if (AIConfig.embeddedFallbackKey.isNotEmpty) {
+        expect(await cfg.apiKey, AIConfig.embeddedFallbackKey);
+      } else {
+        expect(await cfg.apiKey, isNull);
+      }
     });
   });
 
@@ -467,10 +486,12 @@ void main(){
       SharedPreferences.setMockInitialValues({});
       await cfg.resetAll();
       AIConfig.setTestEnvOverride(null);
-      expect(await cfg.apiKey, isNull);
-      // 直接走 Placeholder，不发网，无 401 前缀
+      if (AIConfig.embeddedFallbackKey.isNotEmpty) {
+        expect(await cfg.apiKey, AIConfig.embeddedFallbackKey);
+      } else {
+        expect(await cfg.apiKey, isNull);
+      }
       final dio = dioWithInterceptor((opts, handler) {
-        // 不应被调用，若被调用则回 401 模拟兜底也通过
         handler.resolve(Response(requestOptions: opts, statusCode: 401, data: {'error': {'message': '401'}}));
       });
       final svc = OpenCodeExplainService(dio: dio, config: cfg, fallbackService: const PlaceholderExplainService());

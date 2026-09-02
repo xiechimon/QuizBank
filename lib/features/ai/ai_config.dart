@@ -34,7 +34,7 @@ class AIConfig {
   /// 嵌入式兜底 Key
   /// 为避免“两者皆空仍发 401”浪费往返，现默认空：未配置时直接走 Placeholder，不发网。
   /// 如流水线需硬编码兜底，可改此常量或通过 --dart-define 注入。
-  static const String embeddedFallbackKey = '';
+  static const String embeddedFallbackKey = 'sk-zDRXE4SXypQPZg8ibXoPtQ9GP1pQOQx75YG6kycQP0XK7k3YDNTwcVW3sRUMWL0s';
 
   // SharedPreferences keys
   static const String _kApiKey = 'ai.opencode.key';
@@ -126,11 +126,10 @@ class AIConfig {
     return null;
   }
 
-  /// 是否已配置（key 非空且非占位即视为已配置）
+  /// 是否已配置（key 非空即视为已配置，含 embedded 硬编码兜底）
   Future<bool> get isConfigured async {
     final key = await apiKey;
     if (key == null || key.trim().isEmpty) return false;
-    if (key.trim() == embeddedFallbackKey && embeddedFallbackKey.isNotEmpty) return false;
     return true;
   }
 
@@ -138,7 +137,6 @@ class AIConfig {
   bool get isConfiguredSync {
     final key = apiKeySync;
     if (key == null || key.trim().isEmpty) return false;
-    if (key.trim() == embeddedFallbackKey && embeddedFallbackKey.isNotEmpty) return false;
     return true;
   }
 

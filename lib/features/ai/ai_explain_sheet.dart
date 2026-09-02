@@ -90,15 +90,18 @@ class _AIExplainSheetState extends State<AIExplainSheet> {
     return '';
   }
 
+  // ——— 抄自 AppleProjects/QuizBank AIExplainService.buildInput ———
   String get _prompt {
-    final ctx = _buildContext();
+    final ctx = _buildContext().trim();
     final buf = StringBuffer();
-    buf.writeln('请解析以下选中内容：');
-    buf.writeln('选中：「${widget.selection}」');
+    buf.writeln('【用户选中的文字】');
+    buf.writeln(widget.selection.trim());
     if (ctx.isNotEmpty) {
-      buf.writeln('\n上下文：');
-      buf.write(ctx);
+      final trimmed = ctx.length > 500 ? '${ctx.substring(0, 500)}…' : ctx;
+      buf.writeln('\n【整题上下文】');
+      buf.writeln(trimmed);
     }
+    buf.writeln('\n请按上述要求解析“用户选中的文字”，结合整题上下文说明考点与做题提示。');
     return buf.toString();
   }
 
@@ -135,7 +138,8 @@ class _AIExplainSheetState extends State<AIExplainSheet> {
       final service = await AIExplain.service;
       if (isStream) {
         _streaming = true;
-        if (mounted) setState(() => _loading = false);
+        // 流式初始保持 loading，首个 delta 到达后再关，避免推理阶段空窗显示“暂无结果”
+        if (mounted) setState(() => _loading = true);
         final stream = service.explainStream(prompt: _prompt);
         var got = false;
         // 30s 超时兜底：若 30s 内无任何 delta 且无错误，视为超时
@@ -152,6 +156,9 @@ class _AIExplainSheetState extends State<AIExplainSheet> {
         _sub = stream.listen((delta) {
           if (!mounted) return;
           got = true;
+          if (_loading) {
+            setState(() => _loading = false);
+          }
           // 断流视为失败，不保留半截：若 delta 为错误前缀fallback，丢弃之前半截
           if (_isFallbackDelta(delta) && _result.isNotEmpty) {
             setState(() => _result = delta);
@@ -257,7 +264,7 @@ class _AIExplainSheetState extends State<AIExplainSheet> {
               },
             ),
         ],
-        bottom: _loading && !_streaming
+        bottom: (_loading || (_streaming && _result.isEmpty && _error == null))
             ? const PreferredSize(preferredSize: Size.fromHeight(2), child: LinearProgressIndicator())
             : null,
       ),
@@ -286,7 +293,7 @@ class _AIExplainSheetState extends State<AIExplainSheet> {
           const SizedBox(height: 12),
           const Divider(height: 1),
           const SizedBox(height: 12),
-          if (_loading && !_streaming)
+          if (_loading || (_streaming && _result.isEmpty && _error == null))
             Padding(
               padding: const EdgeInsets.only(top: 24),
               child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -336,10 +343,6 @@ class _AIExplainSheetState extends State<AIExplainSheet> {
             ],
           ] else
             Text('暂无结果', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
-          const SizedBox(height: 14),
-          Center(
-              child: Text(_streaming ? '流式输出 · ${AIConfig.instance.modelSync}' : '占位/非流式 · ${AIConfig.instance.modelSync}',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(color: cs.onSurfaceVariant))),
         ],
       ),
     );

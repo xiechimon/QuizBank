@@ -256,17 +256,24 @@ class _QuizSessionViewState extends ConsumerState<QuizSessionView> {
             child: const Text('完成'),
           ),
           const SizedBox(height: 8),
-          OutlinedButton(
-            onPressed: () {
-              setState(() {
-                c.index = 0;
-                c.correctCount = 0;
-                c.wrongCount = 0;
-                c.submitted = false;
-              });
-            },
-            child: const Text('再练一次'),
-          ),
+          if (widget.sourceRaw == 'cardJump')
+            OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).pop('nextCard'),
+              icon: const Icon(Icons.skip_next_rounded),
+              label: const Text('下一张卡片'),
+            )
+          else
+            OutlinedButton(
+              onPressed: () {
+                setState(() {
+                  c.index = 0;
+                  c.correctCount = 0;
+                  c.wrongCount = 0;
+                  c.submitted = false;
+                });
+              },
+              child: const Text('再练一次'),
+            ),
           const SizedBox(height: 16),
           Text('答题明细', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),

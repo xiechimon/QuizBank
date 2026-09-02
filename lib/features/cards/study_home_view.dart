@@ -409,8 +409,25 @@ class _StudyCardDetailViewState extends ConsumerState<StudyCardDetailView> {
     final visibleIds = _visibleCards.map((c) => c.cardId).toSet();
     if (!visibleIds.contains(resume.cardId)) return;
     if (!mounted) return;
+    final csSnack = Theme.of(context).colorScheme;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text('检测到上次朗读断点（第 ${resume.index + 1} 段），是否续播？'),
+      content: Row(
+        children: [
+          Expanded(child: Text('检测到上次朗读断点（第 ${resume.index + 1} 段），是否续播？')),
+          TextButton(
+            onPressed: () {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+              CardReadingService.clearResume();
+            },
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              minimumSize: Size.zero,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            child: Text('忽略', style: TextStyle(color: csSnack.inversePrimary)),
+          ),
+        ],
+      ),
       action: SnackBarAction(label: '续播', onPressed: () {
         final card = flat.firstWhere((c) => c.cardId == resume.cardId);
         final idx = _visibleCards.indexWhere((c) => c.cardId == card.cardId);
@@ -420,7 +437,9 @@ class _StudyCardDetailViewState extends ConsumerState<StudyCardDetailView> {
           _startCardTts(card, startIndex: resume.index);
         }
       }),
-      duration: const Duration(seconds: 5),
+      duration: const Duration(seconds: 8),
+      behavior: SnackBarBehavior.floating,
+      dismissDirection: DismissDirection.horizontal,
     ));
   }
 
@@ -609,14 +628,21 @@ class _StudyCardDetailViewState extends ConsumerState<StudyCardDetailView> {
                 ),
                 const Spacer(),
                 FilledButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).push(MaterialPageRoute(
+                  onPressed: () async {
+                    final res = await Navigator.of(context).push(MaterialPageRoute(
                       builder: (_) => QuizSessionView(
                         questionIds: cardRelatedIds(currentCard),
                         title: currentCard.title,
                         sourceRaw: 'cardJump',
                       ),
                     ));
+                    if (res == 'nextCard' && mounted) {
+                      if (_currentIndex < visible.length - 1) {
+                        _pageController.nextPage(duration: const Duration(milliseconds: 250), curve: Curves.easeInOut);
+                      } else {
+                        if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已是最后一张卡片')));
+                      }
+                    }
                   },
                   icon: const Icon(Icons.quiz_rounded),
                   label: Text('练习 ${cardRelatedIds(currentCard).length} 题'),
@@ -677,10 +703,17 @@ class _StudyCardDetailViewState extends ConsumerState<StudyCardDetailView> {
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
                     const Spacer(),
                     TextButton(
-                      onPressed: () {
-                        Navigator.of(context).push(MaterialPageRoute(
+                      onPressed: () async {
+                        final res = await Navigator.of(context).push(MaterialPageRoute(
                           builder: (_) => QuizSessionView(questionIds: card.relatedQuestionIds, title: card.title, sourceRaw: 'cardJump'),
                         ));
+                        if (res == 'nextCard' && mounted) {
+                          if (_currentIndex < _visibleCards.length - 1) {
+                            _pageController.nextPage(duration: const Duration(milliseconds: 250), curve: Curves.easeInOut);
+                          } else {
+                            if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已是最后一张卡片')));
+                          }
+                        }
                       },
                       child: const Text('去练习 >'),
                     ),
@@ -690,9 +723,30 @@ class _StudyCardDetailViewState extends ConsumerState<StudyCardDetailView> {
                 Wrap(
                   spacing: 6,
                   runSpacing: 6,
-                  children: card.relatedQuestionIds.take(20).map((id) => Chip(label: Text('#$id'), visualDensity: VisualDensity.compact)).toList(),
+                  children: card.relatedQuestionIds.asMap().entries.map((e) {
+                    final idx = e.key;
+                    final id = e.value;
+                    return ActionChip(
+                      label: Text('#$id'),
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () async {
+                        // 关联题单芯片：以该题为起点连续练习至末题，而非单题会话
+                        // 符合 grill 决策：逐题 已提交→下一题，全部答完才 会话已结束；结束后提供 完成/下一张卡片
+                        final suffix = card.relatedQuestionIds.sublist(idx);
+                        final res = await Navigator.of(context).push(MaterialPageRoute(
+                          builder: (_) => QuizSessionView(questionIds: suffix, title: card.title, sourceRaw: 'cardJump'),
+                        ));
+                        if (res == 'nextCard' && mounted) {
+                          if (_currentIndex < _visibleCards.length - 1) {
+                            _pageController.nextPage(duration: const Duration(milliseconds: 250), curve: Curves.easeInOut);
+                          } else {
+                            if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已是最后一张卡片')));
+                          }
+                        }
+                      },
+                    );
+                  }).toList(),
                 ),
-                if (card.relatedQuestionIds.length > 20) Text('...等 ${card.relatedQuestionIds.length} 题', style: Theme.of(context).textTheme.labelSmall),
               ],
             ),
           ),

@@ -8,6 +8,7 @@ import 'widgets/type_card.dart';
 import 'widgets/daily_chart_card.dart';
 import 'widgets/forecast_card.dart';
 import 'widgets/topic_progress_card.dart';
+import '../settings/settings_view.dart';
 
 class StatsView extends ConsumerWidget {
   const StatsView({super.key});
@@ -18,7 +19,18 @@ class StatsView extends ConsumerWidget {
     final cardsAsync = ref.watch(allStudyCardsProvider);
     final modulesAsync = ref.watch(allStudyModulesProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('复盘')),
+      appBar: AppBar(
+        title: const Text('复盘'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_rounded),
+            tooltip: '设置',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SettingsView()),
+            ),
+          ),
+        ],
+      ),
       body: ListView(padding: const EdgeInsets.fromLTRB(16, 16, 16, 32), children: [
         if (questionsAsync.isLoading || logsAsync.isLoading || cardsAsync.isLoading || modulesAsync.isLoading)
           const Padding(padding: EdgeInsets.all(32), child: Center(child: CircularProgressIndicator()))

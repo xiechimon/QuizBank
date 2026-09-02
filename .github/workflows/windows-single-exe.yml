@@ -1,0 +1,49 @@
+name: Windows 单文件打包
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.47.0"
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Build Windows Release
+        run: flutter build windows --release
+
+      - name: Build 单文件安装包 (Inno Setup)
+        uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
+        with:
+          path: windows/installer.iss
+          options: /O+
+
+      - name: 同时打包便携单文件 (7z SFX 可选)
+        shell: pwsh
+        run: |
+          $release = "build/windows/x64/runner/Release"
+          $out = "build/windows-installer"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          # 便携 zip
+          Compress-Archive -Path "$release/*" -DestinationPath "$out/QuizBank-Portable-x64.zip" -Force
+          Get-ChildItem $out | Format-Table Name, Length
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuizBank-Windows-SingleExe
+          path: |
+            build/windows-installer/*.exe
+            build/windows-installer/*.zip
+          if-no-files-found: error

@@ -247,8 +247,10 @@ void main() {
       final md = t.widget<MarkdownBody>(find.byType(MarkdownBody));
       expect(md.selectable, isTrue);
       expect(md.data.isNotEmpty, isTrue);
-      // Footer shows model
-      expect(find.textContaining('longcat-2.0'), findsOneWidget);
+      // Footer model removed per user request: should not show 占位/非流式•model
+      expect(find.textContaining('longcat-2.0'), findsNothing);
+      expect(find.textContaining('占位/非流式'), findsNothing);
+      expect(find.textContaining('流式输出'), findsNothing);
       // Markdown styleSheet handles strong/bold: data contains bold? check placeholder contains bold markers? placeholder has 【占位解析】
       // Placeholder may trigger network fallback with retry; accept either case but ensure Markdown exists and footer present
       // If fallback prefix appears, retry will be visible; otherwise not. Both are valid non-white-screen outcomes.

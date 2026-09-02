@@ -21,6 +21,14 @@
 - **今日队列 `Derived.compute`**：到期巩固全量 + 新考点补至约 40 题。巩固超量则当日不推新（复习优先）。
 - **题级调度 `ReviewScheduler`**：`1/2/4/7/15` 天，仅作题目 `phase/nextReviewDate` 容错与统计，不决定队列。
 
+### 练习会话
+- **会话**：一次进入 `QuizSessionView` 的练习过程，由同一 `sessionId` 串联，其内每题提交产生一条 `AnswerLog`。*Avoid*: 轮次。
+- **已提交 `submitted`**：会话内单题点选项/提交后显示正误与解析、可点“下一题”的题级状态。*Avoid*: 已完成。
+- **会话已结束 `isFinished`**：`index >= questions.length`，显示结果页 `正确率/完成`。*Avoid*: 已通过。
+- **考点已通过 `passed`**：会话内同一 `sessionId` 下该考点全部变式题一轮内全对，`TopicScheduler.transit` 晋升 `passed`。单题会话仅在单变式考点上才能触发。*Avoid*: 已完成。
+- **关联题芯片**：卡片详情 `关联题目` 区每个 `#id` 为 `ActionChip`，点击以该题为起点 `sublist(idx)` 连续练习至末题，逐题 `已提交`→`下一题`，全部答完才 `会话已结束`。
+- **关联题结果页**：`sourceRaw==cardJump` 的会话结束页为 `完成 / 下一张卡片` 双选项；`完成` 弹回当前卡，`下一张卡片` 弹回并自动翻至 `PageView` 下一张（末卡则提示已是最后一张）。*Avoid*: 再练一次（仅非 cardJump 会话可用）。
+
 ### 入口
 - **错题本**：`timesWrong>0 && phase<6` 的题，随时查漏，不参与调度。
 - **自由刷题**：按范围/题型随机练，与调度无关。
@@ -36,12 +44,14 @@
 - **富文本**：`content` 行级语法 `|` 表格 `·` 列表 `#` 小标题 `【】` 强调。`【】` 橙色高亮，`heading` 不可选，其余可选。
 - **模块切换**：详情页 `MenuAnchor` 17 模块同页切换，页码回 0。
 - **朗读（P2）**：标题喇叭 → `flutter_tts` 中文 → 行级高亮 → 播完翻页续播 → 关联题解析接力 → 断点续播。
+- **关联题交互**：见“练习会话·关联题芯片”。
 
 ## 架构决策（ADR 摘要）
 - **ADR-1 题库增量**：`BankImporter` SHA256(questions.json) 存 `SharedPreferences`，hash 不变跳过，变化则按 `id` upsert 且保留 `phase/timesCorrect/isFavorite`。
 - **ADR-2 考点为调度事实源**：`TopicScheduler.transit` 纯函数（today 注入），`TopicProgress.isSingleRoundPassed` 判定同 `sessionId` 内全对。
 - **ADR-3 AI 网关**：`dio` + `AIConfig(baseURL/model/apiKey)`，`OPENCODE_API_KEY` dart-define 注入，`embeddedFallbackKey` 仅占位。
 - **ADR-004 AI真实模型**：`opencode.ai/zen/go/v1` + `mimo-v2.5` 首选流式，`deepseek` 流式/`longcat` 降级；Key链路 `ai.opencode.key` > `OPENCODE_API_KEY` > 占位（B 编译注入），401/断流占位不阻断（2026-09-01 接受）。
+- **ADR-005 AI无VPN接入**：系统 DNS（模拟器/真机污染）解析失败时 `DnsBootstrap` 经 DoH（阿里 dns.alidns.com / 腾讯 doh.pub，固定 IP + TLS SNI）拿真实 A 记录直连；`OpenCodeExplainService._client` 使用 `HttpClient.connectionFactory` 自管建连（该模式下 dart:io 不自动 TLS，https 需 `SecureSocket.secure`）。系统解析成功但 IP 不可达时强制 DoH 重试一次。缓存 5 分钟 / 负缓存 20 秒（2026-09-02 接受）。
 
 ## 非目标
 - 无 Onboarding、无推送、无服务端、本地 SQLite 全量离线。

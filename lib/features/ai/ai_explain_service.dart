@@ -1,9 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 
 import 'ai_config.dart';
+import 'dns_bootstrap.dart';
 
 /// AI 解释服务抽象
 ///
@@ -87,11 +90,26 @@ class PlaceholderExplainService implements AIExplainService {
     if (q.trim().isEmpty) {
       return 'AI 占位解释：未提供题目内容，暂无法生成解析。';
     }
+    // 清理 iOS 同款 prompt 包装，仅取真正选中文字用于占位展示
+    var displayQ = q.trim();
+    if (displayQ.contains('【用户选中的文字】')) {
+      final start = displayQ.indexOf('【用户选中的文字】') + '【用户选中的文字】'.length;
+      var rest = displayQ.substring(start).trim();
+      final endMarkers = ['【整题上下文】', '请按上述要求解析'];
+      var end = rest.length;
+      for (final m in endMarkers) {
+        final idx = rest.indexOf(m);
+        if (idx != -1 && idx < end) end = idx;
+      }
+      displayQ = rest.substring(0, end).trim();
+      if (displayQ.isEmpty) displayQ = q.trim();
+    }
+    if (displayQ.length > 200) displayQ = '${displayQ.substring(0, 200)}…';
     // 简单本地占位解释，不依赖网络
     final buffer = StringBuffer();
     buffer.writeln('【占位解析】');
     buffer.writeln();
-    buffer.writeln('题目：$q');
+    buffer.writeln('题目：$displayQ');
     if (answer != null && answer.trim().isNotEmpty) {
       buffer.writeln('参考答案：$answer');
     }
@@ -187,18 +205,85 @@ class OpenCodeExplainService implements AIExplainService {
 
   Dio get _client {
     if (_dio != null) return _dio;
-    return Dio(
+    final dio = Dio(
       BaseOptions(
         connectTimeout: const Duration(seconds: 10),
         receiveTimeout: const Duration(seconds: 30),
         sendTimeout: const Duration(seconds: 10),
-        // 不在此指定 baseUrl，调用处拼接完整 URL 以兼容不同网关前缀
         headers: const {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
       ),
     );
+    // 修复：移除对 10.0.2.2 的硬编码代理（仅模拟器宿主 Clash 需要）
+    // 真机上 10.0.2.2 不可达会导致 30s 超时叠加，体感为“不开 VPN 就不通”
+    // 默认 DIRECT，由系统 VPN/代理自动接管；模拟器如需走宿主代理请在模拟器设置中手动配置代理
+    // DNS 兜底：系统 DNS 解析失败/污染时经 DoH 拿到真实 IP 直连（无需 VPN）
+    try {
+      final adapter = dio.httpClientAdapter;
+      if (adapter is IOHttpClientAdapter) {
+        adapter.createHttpClient = () {
+          final client = HttpClient()
+            ..connectionTimeout = const Duration(seconds: 10);
+          client.findProxy = (uri) => 'DIRECT';
+          // 自定义连接工厂：解析失败时走 DnsBootstrap（系统 DNS → DoH 兜底）
+          // 注意：connectionFactory 模式下 dart:io 不再自动做 TLS 升级，https 需返回 SecureSocket
+          client.connectionFactory = (uri, proxyHost, proxyPort) {
+            final Future<Socket> socket;
+            if (proxyHost != null && proxyHost.isNotEmpty) {
+              // 有显式代理：直连代理地址（DIRECT 下通常为 null），https 时需 TLS 升级
+              socket = _connect(proxyHost, proxyPort ?? uri.port, uri);
+            } else {
+              socket = _connectWithDnsBootstrap(uri);
+            }
+            return Future.value(ConnectionTask.fromSocket(socket, () {}));
+          };
+          return client;
+        };
+      }
+    } catch (_) {}
+    return dio;
+  }
+
+  /// 通过 DnsBootstrap 解析并连接：[host] 解析失败时以 DoH 兜底（无需系统 DNS/VPN）
+  ///
+  /// 第一轮失败后强制 DoH 重连一次，覆盖“系统解析成功但 IP 被污染/不可达”的场景。
+  /// https 请求在裸 TCP 后做 TLS 升级（SNI/证书校验仍按域名）。
+  Future<Socket> _connectWithDnsBootstrap(Uri uri) async {
+    final addrs = await DnsBootstrap.instance.resolve(uri.host);
+    var socket = await _tryConnect(addrs, uri.port);
+    if (socket != null) return _maybeSecure(socket, uri);
+    // 强制 DoH 重试（跳过系统 DNS 结果）
+    final dohAddrs = await DnsBootstrap.instance.resolveViaDoH(uri.host);
+    socket = await _tryConnect(dohAddrs, uri.port);
+    if (socket != null) return _maybeSecure(socket, uri);
+    throw SocketException('Failed host lookup: ${uri.host}');
+  }
+
+  /// 直接连接指定主机的辅助（代理场景）
+  Future<Socket> _connect(String host, int port, Uri uri) async {
+    final socket = await Socket.connect(host, port, timeout: const Duration(seconds: 8));
+    return _maybeSecure(socket, uri);
+  }
+
+  /// https 时用 [SecureSocket.secure] 升级：SNI/证书校验均按 [uri.host]
+  Future<Socket> _maybeSecure(Socket socket, Uri uri) {
+    if (uri.scheme == 'https') {
+      return SecureSocket.secure(socket, host: uri.host);
+    }
+    return Future.value(socket);
+  }
+
+  Future<Socket?> _tryConnect(List<InternetAddress> addrs, int port) async {
+    for (final addr in addrs) {
+      try {
+        return await Socket.connect(addr, port, timeout: const Duration(seconds: 8));
+      } catch (_) {
+        continue;
+      }
+    }
+    return null;
   }
 
   // ---------------------------------------------------------------------------
@@ -366,7 +451,7 @@ class OpenCodeExplainService implements AIExplainService {
         );
         return '【空响应】AI 未返回有效内容，请稍后重试\n\n$fallbackText';
       }
-      return contentText.trim();
+      return sanitize(contentText.trim());
     } on DioException catch (e) {
       final mapped = _mapDioError(e);
       // 网络错误等可回退到占位，避免直接崩溃
@@ -774,7 +859,7 @@ class OpenCodeExplainService implements AIExplainService {
       if (status >= 400) return null;
       final contentText = _extractContent(resp.data);
       if (contentText == null || contentText.trim().isEmpty) return null;
-      return contentText.trim();
+      return sanitize(contentText.trim());
     } catch (_) {
       return null;
     }
@@ -852,16 +937,18 @@ class OpenCodeExplainService implements AIExplainService {
       final delta = first['delta'] as Map<String, dynamic>?;
       if (delta != null) {
         final c = delta['content'];
-        if (c is String) return c;
+        if (c is String && c.isNotEmpty) return sanitize(c);
+        // 推理模型的 reasoning_content 为内部思考过程，不应直接展示给用户，
+        // 此处忽略，等待 content 到达，期间 UI 保持 loading（正在解析…）
       }
       final message = first['message'] as Map<String, dynamic>?;
       if (message != null) {
         final c = message['content'];
-        if (c is String) return c;
+        if (c is String) return sanitize(c);
       }
       // 兼容部分网关直接返回 text
       final text = first['text'];
-      if (text is String) return text;
+      if (text is String) return sanitize(text);
       return null;
     } catch (_) {
       return null;
@@ -876,6 +963,30 @@ class OpenCodeExplainService implements AIExplainService {
     return '$trimmed/chat/completions';
   }
 
+  // ——— 抄自 AppleProjects/QuizBank/QuizBank/Features/AI/AIExplainService.swift ———
+  static const String _systemInstructions = '''
+你是审计考试辅导老师，用大白话+举例子讲懂。面向中国审计知识竞赛考生。要求：
+1. 用通俗易懂的口语，先把选中句子掰开揉碎，再解释关键词；每个术语都配一句生活化类比或小例子。
+2. 紧扣这句话举 1-2 个审计实务或日常例子帮记忆，必要时用 Markdown 表格对比易混概念，最后给一句口诀。
+3. 准则编号不确定就说“按现行准则”，不编号。
+4. 全文不要用 emoji 或特殊符号如 ✅ ❌ ✓ ✗ ✔ ✘ ★ ● 💡 📌 🎯 ✨ 🔑 💎 ◆ ◇，只用中文“可以/不可以”“是/否”加文字说明。
+5. 500 字内，少用术语，不重复题干。
+''';
+
+  static String sanitize(String text) {
+    var s = text;
+    const map = {
+      '✅': '可以', '❌': '不可以', '✓': '可以', '✗': '不可以',
+      '✔': '可以', '✘': '不可以', '√': '可以', '×': '不可以',
+      '★': '', '●': '·', '◆': '', '◇': '',
+      '💡': '', '📌': '', '🎯': '', '✨': '', '🔑': '', '💎': '',
+      '❗': '！', '❓': '？',
+    };
+    map.forEach((k, v) => s = s.replaceAll(k, v));
+    s = s.replaceAll('\uFFFD', '');
+    return s;
+  }
+
   List<Map<String, String>> _buildMessages({
     required String prompt,
     String? answer,
@@ -885,10 +996,12 @@ class OpenCodeExplainService implements AIExplainService {
     String? options,
     List<String>? choices,
   }) {
+    // system：优先外部传入，否则用 iOS 同款审计辅导口吻
     final system = systemPrompt?.trim().isNotEmpty == true
         ? systemPrompt!.trim()
-        : '你是 QuizBank 的学习助手，请用中文简洁、结构化地讲解题目，包含：题意分析、正确选项/判断依据、干扰项辨析、记忆要点。';
+        : _systemInstructions;
 
+    // user：已按 sheet 拼好 "【用户选中的文字】+【整题上下文】+ 指令"，此处仅做兼容追加（避免旧调用丢字段）
     final userBuffer = StringBuffer(prompt.trim());
     if (options != null && options.trim().isNotEmpty) {
       userBuffer.writeln('\n选项：$options');
@@ -905,7 +1018,10 @@ class OpenCodeExplainService implements AIExplainService {
     if (explanation != null && explanation.trim().isNotEmpty) {
       userBuffer.writeln('\n原始解析：$explanation');
     }
-    userBuffer.writeln('\n请给出易懂的讲解。');
+    // 若 prompt 已包含 iOS 的尾指令则不重复追加
+    if (!userBuffer.toString().contains('请按上述要求解析')) {
+      userBuffer.writeln('\n请给出易懂的讲解。');
+    }
 
     return [
       {'role': 'system', 'content': system},
@@ -922,14 +1038,15 @@ class OpenCodeExplainService implements AIExplainService {
       final message = first['message'] as Map<String, dynamic>?;
       if (message != null) {
         final c = message['content'];
-        if (c is String) return c;
+        if (c is String && c.isNotEmpty) return sanitize(c);
         // 部分兼容：content 为 List
         if (c is List) {
-          return c.map((e) => (e as Map)['text']?.toString() ?? '').join();
+          final joined = c.map((e) => (e as Map)['text']?.toString() ?? '').join();
+          if (joined.isNotEmpty) return sanitize(joined);
         }
       }
       final text = first['text'];
-      if (text is String) return text;
+      if (text is String && text.isNotEmpty) return sanitize(text);
       return null;
     } catch (_) {
       return null;
@@ -961,7 +1078,7 @@ class OpenCodeExplainService implements AIExplainService {
       case DioExceptionType.connectionTimeout:
       case DioExceptionType.sendTimeout:
       case DioExceptionType.receiveTimeout:
-        return AINetworkException('网络超时，请检查网络后重试（${e.type.name}）');
+        return const AINetworkException('网络超时，请检查网络后重试');
       case DioExceptionType.connectionError:
         return AINetworkException('网络连接失败，请检查网络后重试');
       case DioExceptionType.badResponse:
