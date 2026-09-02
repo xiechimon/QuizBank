@@ -6,6 +6,16 @@ import 'features/stats/stats_view.dart';
 class QuizBankApp extends StatelessWidget {
   const QuizBankApp({super.key});
 
+  static const _chineseFallback = [
+    'Microsoft YaHei', // Windows 简中首选，解决日文字形回退
+    'PingFang SC', // macOS
+    'Hiragino Sans GB',
+    'Noto Sans SC',
+    'Source Han Sans SC',
+    'Noto Sans CJK SC',
+    'WenQuanYi Micro Hei',
+  ];
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -13,6 +23,7 @@ class QuizBankApp extends StatelessWidget {
         theme: ThemeData(
           useMaterial3: true,
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.orange),
+          fontFamilyFallback: _chineseFallback,
         ),
         darkTheme: ThemeData(
           useMaterial3: true,
@@ -20,6 +31,7 @@ class QuizBankApp extends StatelessWidget {
             seedColor: Colors.orange,
             brightness: Brightness.dark,
           ),
+          fontFamilyFallback: _chineseFallback,
         ),
         home: const RootScaffold(),
       );
