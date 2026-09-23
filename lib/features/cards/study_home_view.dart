@@ -1,6 +1,7 @@
 // M3: Card, FilterChip, PageView, MenuAnchor, NavigationBar via app.dart
 import 'package:drift/drift.dart' as drift;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/database.dart';
 import '../../data/models.dart';
@@ -307,6 +308,30 @@ class _StudyCardDetailViewState extends ConsumerState<StudyCardDetailView> {
   String? _playingCardId;
   bool _resumeChecked = false;
   bool _playingExplanations = false;
+  // 键盘缩放：以 0.1 为步长的整数档位，避免浮点累计漂移；范围 [-5, 20] → 0.5x ~ 3.0x
+  int _zoomSteps = 0;
+  late final FocusNode _zoomFocusNode = FocusNode();
+
+  double get _zoomScale => (10 + _zoomSteps) / 10;
+
+  KeyEventResult _handleZoomKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) return KeyEventResult.ignored;
+    if (!HardwareKeyboard.instance.isControlPressed) return KeyEventResult.ignored;
+    final k = event.logicalKey;
+    if (k == LogicalKeyboardKey.equal || k == LogicalKeyboardKey.numpadAdd || k == LogicalKeyboardKey.add) {
+      setState(() => _zoomSteps = (_zoomSteps + 1).clamp(-5, 20));
+      return KeyEventResult.handled;
+    }
+    if (k == LogicalKeyboardKey.minus || k == LogicalKeyboardKey.numpadSubtract) {
+      setState(() => _zoomSteps = (_zoomSteps - 1).clamp(-5, 20));
+      return KeyEventResult.handled;
+    }
+    if (k == LogicalKeyboardKey.digit0 || k == LogicalKeyboardKey.numpad0) {
+      setState(() => _zoomSteps = 0);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
 
   @override
   void initState() {
@@ -464,6 +489,7 @@ class _StudyCardDetailViewState extends ConsumerState<StudyCardDetailView> {
     _tts.removeListener(_onTtsTick);
     _tts.dispose();
     _pageController.dispose();
+    _zoomFocusNode.dispose();
     super.dispose();
   }
 
@@ -483,7 +509,11 @@ class _StudyCardDetailViewState extends ConsumerState<StudyCardDetailView> {
     // If filter changes, we need to recalc current
     final currentCard = visible[_currentIndex.clamp(0, visible.length - 1)];
 
-    return Scaffold(
+    return Focus(
+      focusNode: _zoomFocusNode,
+      autofocus: true,
+      onKeyEvent: _handleZoomKey,
+      child: Scaffold(
       appBar: AppBar(
         title: Text(currentCard.title),
         actions: [
@@ -590,7 +620,9 @@ class _StudyCardDetailViewState extends ConsumerState<StudyCardDetailView> {
           ),
         ),
       ),
-      body: Column(
+      body: MediaQuery(
+        data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(_zoomScale)),
+        child: Column(
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -602,6 +634,11 @@ class _StudyCardDetailViewState extends ConsumerState<StudyCardDetailView> {
                 ),
                 const SizedBox(width: 8),
                 Text('${_currentIndex + 1} / ${visible.length}', style: Theme.of(context).textTheme.labelSmall),
+                if (_zoomSteps != 0) ...[
+                  const SizedBox(width: 8),
+                  Text('${(_zoomScale * 100).round()}%',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(color: cs.primary)),
+                ],
                 const Spacer(),
                 Text(TopicStatusX.fromRaw(currentCard.storedStatusRaw).displayName,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(color: cs.primary, fontWeight: FontWeight.bold)),
@@ -673,6 +710,8 @@ class _StudyCardDetailViewState extends ConsumerState<StudyCardDetailView> {
             ),
           ),
         ],
+        ),
+      ),
       ),
     );
   }
