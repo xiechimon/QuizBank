@@ -34,7 +34,7 @@ class AIConfig {
   /// 嵌入式兜底 Key
   /// 为避免“两者皆空仍发 401”浪费往返，现默认空：未配置时直接走 Placeholder，不发网。
   /// 如流水线需硬编码兜底，可改此常量或通过 --dart-define 注入。
-  static const String embeddedFallbackKey = 'sk-zDRXE4SXypQPZg8ibXoPtQ9GP1pQOQx75YG6kycQP0XK7k3YDNTwcVW3sRUMWL0s';
+  static const String embeddedFallbackKey = '';
 
   // SharedPreferences keys
   static const String _kApiKey = 'ai.opencode.key';
