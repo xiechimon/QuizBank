@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'core/error_reporting.dart';
 import 'features/today/today_view.dart';
 import 'features/practice/practice_view.dart';
 import 'features/cards/study_home_view.dart';
@@ -47,6 +48,24 @@ class RootScaffold extends StatefulWidget {
 
 class _RootScaffoldState extends State<RootScaffold> {
   int _index = 0;
+  AppLifecycleListener? _lifecycle;
+
+  @override
+  void initState() {
+    super.initState();
+    // 无声退出验尸：记录暂停/恢复/分离，若日志停在 paused 说明是系统层面杀进程
+    _lifecycle = AppLifecycleListener(
+      onPause: () => CrashLogger.instance.log('lifecycle', 'paused'),
+      onResume: () => CrashLogger.instance.log('lifecycle', 'resumed'),
+      onDetach: () => CrashLogger.instance.log('lifecycle', 'detached'),
+    );
+  }
+
+  @override
+  void dispose() {
+    _lifecycle?.dispose();
+    super.dispose();
+  }
 
   static const _pages = [
     TodayView(),
