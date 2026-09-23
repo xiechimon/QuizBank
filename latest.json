@@ -1,8 +1,8 @@
 {
-  "url": "https://github.com/xiechimon/QuizBank/releases/download/v1.2.2/QuizBank-Setup-1.2.2-x64.exe",
-  "assetName": "QuizBank-Setup-1.2.2-x64.exe",
-  "sha256": "39df6981a7a6f3a54818f29a60519638f561d786124c0456f82f9df6af204697",
-  "version": "1.2.2",
+  "assetName": "QuizBank-Setup-1.2.3-x64.exe",
+  "tag": "v1.2.3",
+  "version": "1.2.3",
   "notes": "",
-  "tag": "v1.2.2"
+  "sha256": "90f61e34a67663ae4f68621e7cd65ede42458c1def47ee642192346ccd1bef9f",
+  "url": "https://github.com/xiechimon/QuizBank/releases/download/v1.2.3/QuizBank-Setup-1.2.3-x64.exe"
 }
