@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'database.dart';
 import 'models.dart';
 
@@ -6,6 +7,45 @@ import 'models.dart';
 // Database provider
 // ---------------------------------------------------------------------------
 final appDatabaseProvider = Provider<AppDatabase>((ref) => AppDatabase());
+
+// ---------------------------------------------------------------------------
+// 速记目录树展开状态：模块 id 集合，跨 tab / 跨重启记忆（SharedPreferences 持久化）
+// ---------------------------------------------------------------------------
+class TocExpansionNotifier extends Notifier<Set<int>> {
+  static const _prefsKey = 'cardToc.expandedModuleIds';
+
+  @override
+  Set<int> build() {
+    _load();
+    return <int>{};
+  }
+
+  Future<void> _load() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getStringList(_prefsKey);
+      if (raw != null && raw.isNotEmpty) {
+        state = raw.map(int.tryParse).whereType<int>().toSet();
+      }
+    } catch (_) {}
+  }
+
+  void toggle(int moduleId) {
+    final next = {...state};
+    if (!next.remove(moduleId)) next.add(moduleId);
+    state = next;
+    _persist(next);
+  }
+
+  Future<void> _persist(Set<int> ids) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(_prefsKey, ids.map((e) => '$e').toList());
+    } catch (_) {}
+  }
+}
+
+final tocExpansionProvider = NotifierProvider<TocExpansionNotifier, Set<int>>(TocExpansionNotifier.new);
 
 // Mappers Db -> Model
 Question _mapQuestion(DbQuestion e) => Question(

@@ -47,6 +47,8 @@ class _StudyHomeViewState extends ConsumerState<StudyHomeView> {
         data: (modules) {
           final allCards = modules.expand((m) => m.cards).toList();
           final filteredModules = _applyFilter(modules);
+          final expandedIds = ref.watch(tocExpansionProvider);
+          final filterActive = _filterStatus != null || _onlyFavorite;
 
           return Column(
             children: [
@@ -72,7 +74,8 @@ class _StudyHomeViewState extends ConsumerState<StudyHomeView> {
                         itemCount: filteredModules.length,
                         itemBuilder: (context, modIndex) {
                           final mod = filteredModules[modIndex];
-                          return _moduleSection(context, mod, modules);
+                          return _moduleSection(context, mod, modules,
+                              expanded: expandedIds.contains(mod.id) || filterActive);
                         },
                       ),
               ),
@@ -141,31 +144,44 @@ class _StudyHomeViewState extends ConsumerState<StudyHomeView> {
     );
   }
 
-  Widget _moduleSection(BuildContext context, StudyModule mod, List<StudyModule> allModules) {
+  /// 目录树一级节点：模块头可点击展开/收起，收起时不再平铺卡片
+  Widget _moduleSection(BuildContext context, StudyModule mod, List<StudyModule> allModules, {required bool expanded}) {
     final cs = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(4, 12, 4, 6),
-          child: Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(color: cs.primaryContainer, borderRadius: BorderRadius.circular(8)),
-                child: Center(child: Text('${mod.order}', style: TextStyle(color: cs.onPrimaryContainer, fontWeight: FontWeight.bold))),
+          padding: const EdgeInsets.fromLTRB(4, 4, 4, 2),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () => ref.read(tocExpansionProvider.notifier).toggle(mod.id),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(color: cs.primaryContainer, borderRadius: BorderRadius.circular(8)),
+                      child: Center(child: Text('${mod.order}', style: TextStyle(color: cs.onPrimaryContainer, fontWeight: FontWeight.bold))),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(mod.name,
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+                    ),
+                    Chip(label: Text('${mod.cards.length} 卡'), visualDensity: VisualDensity.compact),
+                    const SizedBox(width: 2),
+                    Icon(expanded ? Icons.expand_less_rounded : Icons.expand_more_rounded, color: cs.onSurfaceVariant),
+                  ],
+                ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(mod.name,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
-              ),
-              Chip(label: Text('${mod.cards.length} 卡'), visualDensity: VisualDensity.compact),
-            ],
+            ),
           ),
         ),
-        ...mod.cards.map((card) => _cardTile(context, card: card, module: mod, allModules: allModules)),
+        if (expanded) ...mod.cards.map((card) => _cardTile(context, card: card, module: mod, allModules: allModules)),
       ],
     );
   }
