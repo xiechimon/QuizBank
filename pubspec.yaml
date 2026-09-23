@@ -1,7 +1,7 @@
 name: quiz_bank
 description: "QuizBank Flutter M3 rebuild of iOS 1170 questions + 17 modules"
 publish_to: 'none'
-version: 1.2.0+3
+version: 1.2.1+4
 
 environment:
   sdk: ^3.13.0
