@@ -146,6 +146,26 @@ void main() {
       await tmp.delete(recursive: true);
     });
 
+    test('更新脚本: VBS 全隐藏链路（不闪 cmd 黑窗）', () {
+      final s = UpdateService.buildUpdateScript(
+        installerPath: r'C:\Users\test\AppData\Local\Temp\QuizBank-Setup-9.9.9-x64.exe',
+        relaunchPath: r'C:\Program Files\QuizBank\quiz_bank.exe',
+        scriptPath: r'C:\Users\test\AppData\Local\Temp\qb_update.vbs',
+      );
+      expect(s, contains('WScript.Sleep'), reason: '需延时等主进程退出');
+      expect(s, contains('/VERYSILENT /SUPPRESSMSGBOXES /NORESTART'));
+      expect(s, contains('/CLOSEAPPLICATIONS", 0, True'), reason: '安装必须隐藏窗口(0)且等待完成(True)');
+      expect(s, contains('quiz_bank.exe""", 1, False'), reason: '装完以正常窗口重新拉起应用');
+      expect(s, contains('del ""'), reason: '脚本自删且隐藏执行');
+      // 路径含空格与引号时的 VBS 转义
+      final s2 = UpdateService.buildUpdateScript(
+        installerPath: r'C:\My Files\setup "x".exe',
+        relaunchPath: r'C:\A b\app.exe',
+        scriptPath: r'C:\A b\u.vbs',
+      );
+      expect(s2, contains('"""C:\\My Files\\setup ""x"".exe""'));
+    });
+
     testWidgets('设置页: 手动检查更新，无更新时提示已是最新', (t) async {
       SharedPreferences.setMockInitialValues({});
       PackageInfo.setMockInitialValues(

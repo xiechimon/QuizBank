@@ -149,19 +149,34 @@ class UpdateService {
     return null;
   }
 
-  /// Windows 静默重装并重启：bat 延时 → Inno /VERYSILENT → 拉起当前 exe → 本进程退出
+  /// 生成全隐藏更新脚本（VBS，经 wscript.exe //B 执行，全程无控制台窗口）：
+  /// 等 3s（主进程退出）→ 隐藏静默安装并等待 → 正常窗口拉起应用 → 隐藏自删
+  @visibleForTesting
+  static String buildUpdateScript({
+    required String installerPath,
+    required String relaunchPath,
+    required String scriptPath,
+  }) {
+    String q(String p) => '""${p.replaceAll('"', '""')}""';
+    return 'Set sh = CreateObject("WScript.Shell")\r\n'
+        'WScript.Sleep 3000\r\n'
+        'sh.Run "${q(installerPath)} /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS", 0, True\r\n'
+        'sh.Run "${q(relaunchPath)}", 1, False\r\n'
+        'sh.Run "cmd.exe /c ping 127.0.0.1 -n 3 > nul & del ${q(scriptPath)}", 0, False\r\n';
+  }
+
+  /// Windows 静默重装并重启（无窗口闪烁），本进程退出
   Future<void> installAndRestart(File installer) async {
     if (defaultTargetPlatform != TargetPlatform.windows) return;
     final relaunch = Platform.resolvedExecutable;
-    final bat = File('${installer.parent.path}${Platform.pathSeparator}qb_update.bat');
-    await bat.writeAsString(
-      '@echo off\r\n'
-      'ping 127.0.0.1 -n 4 > nul\r\n'
-      '"${installer.path}" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CLOSEAPPLICATIONS\r\n'
-      'start "" "$relaunch"\r\n'
-      'del "%~f0"\r\n',
-    );
-    await Process.start('cmd.exe', ['/c', bat.path], mode: ProcessStartMode.detached);
+    final script = File('${installer.parent.path}${Platform.pathSeparator}qb_update.vbs');
+    await script.writeAsString(buildUpdateScript(
+      installerPath: installer.path,
+      relaunchPath: relaunch,
+      scriptPath: script.path,
+    ));
+    // wscript 为 GUI 子系统程序：不产生控制台窗口；//B 抑制脚本错误弹窗
+    await Process.start('wscript.exe', ['//B', '//nologo', script.path], mode: ProcessStartMode.detached);
     exit(0);
   }
 }

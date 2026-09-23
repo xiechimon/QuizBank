@@ -52,7 +52,7 @@
 ### 自更新
 - **多通道检查**：raw `main/latest.json` 直连 → 镜像轮询（ghfast.top / gh-proxy.com / ghproxy.net）→ GitHub API release 资产；适配无代理网络，全通道失败静默跳过不阻塞启动。
 - **下载与校验**：直连 → 镜像轮询；安装前 SHA256 强制校验（校验和与二进制不同源，防第三方镜像污染），失败删除换通道。
-- **触发**：Windows 启动后每天一次静默检查（`update.lastAutoCheck`）；设置页「检查更新」手动入口。安装走 bat 链：延时 → Inno `/VERYSILENT` → 拉起 `Platform.resolvedExecutable` → 本进程退出。
+- **触发**：Windows 每次启动静默检查，有新版必弹「立即更新」对话框，无新版/断网完全静默；设置页「检查更新」手动入口。安装走 `wscript.exe //B` 执行 VBS 隐藏脚本（全程无控制台窗口）：延时 3s → Inno `/VERYSILENT` 隐藏安装并等待 → 正常窗口拉起 `Platform.resolvedExecutable` → 脚本自删 → 本进程退出。
 - **CI 契约**：tag 构建生成 `latest.json`（version/tag/assetName/url/sha256）+ `SHA256SUMS`，随 Release 上传，且 latest.json 提交回 main（供 raw 镜像通道）。
 
 ## 架构决策（ADR 摘要）
