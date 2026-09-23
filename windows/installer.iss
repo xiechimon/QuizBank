@@ -1,7 +1,7 @@
 ; Inno Setup 单文件安装包配置 - 将 Flutter Windows Release 打成一个 Setup.exe
 ; 在 Windows 上执行: iscc windows/installer.iss
 #define MyAppName "QuizBank"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.2.0"
 #define MyAppPublisher "QuizBank"
 #define MyAppExeName "quiz_bank.exe"
 
