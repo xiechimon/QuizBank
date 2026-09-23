@@ -45,6 +45,43 @@ jobs:
           Compress-Archive -Path "$release/*" -DestinationPath "$out/QuizBank-Portable-x64.zip" -Force
           Get-ChildItem $out | Format-Table Name, Length
 
+      - name: 生成 SHA256SUMS 与 latest.json（应用内自更新元数据）
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $ver = $tag.TrimStart('v')
+          $out = "build/windows-installer"
+          $exe = Get-ChildItem $out -Filter *.exe | Select-Object -First 1
+          Get-ChildItem $out -File | Get-FileHash -Algorithm SHA256 | ForEach-Object {
+            "{0}  {1}" -f $_.Hash.ToLower(), (Split-Path $_.Path -Leaf)
+          } | Set-Content "$out/SHA256SUMS" -Encoding ascii
+          $sum = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLower()
+          @{
+            version   = $ver
+            tag       = $tag
+            assetName = $exe.Name
+            url       = "https://github.com/${{ github.repository }}/releases/download/$tag/$($exe.Name)"
+            sha256    = $sum
+            notes     = ""
+          } | ConvertTo-Json | Set-Content "$out/latest.json" -Encoding utf8
+          Get-Content "$out/latest.json"
+
+      - name: latest.json 提交回 main（raw 通道可经镜像获取）
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main
+          git checkout -B main origin/main
+          Copy-Item build/windows-installer/latest.json latest.json -Force
+          git add latest.json
+          if (-not (git diff --cached --quiet)) {
+            git commit -m "ci: latest.json for ${{ github.ref_name }}"
+            git push origin main
+          }
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -61,4 +98,6 @@ jobs:
           files: |
             build/windows-installer/*.exe
             build/windows-installer/*.zip
+            build/windows-installer/SHA256SUMS
+            build/windows-installer/latest.json
           generate_release_notes: true

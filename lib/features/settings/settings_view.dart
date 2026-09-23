@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../ai/ai_config.dart';
+import 'update_checker.dart';
 
 class _SettingsState {
   final String model;
@@ -116,6 +117,8 @@ class SettingsView extends ConsumerWidget {
                     ),
                   ),
                 ),
+                const SizedBox(height: 12),
+                const _UpdateCard(),
                 const SizedBox(height: 24),
                 // 底部关于，弱化为脚注而非卡片
                 Center(
@@ -126,6 +129,82 @@ class SettingsView extends ConsumerWidget {
                 ),
               ],
             ),
+    );
+  }
+}
+
+/// 检查更新卡片：显示当前版本，点击手动检查（多通道 + SHA256 校验见 UpdateService）
+class _UpdateCard extends StatefulWidget {
+  const _UpdateCard();
+
+  @override
+  State<_UpdateCard> createState() => _UpdateCardState();
+}
+
+class _UpdateCardState extends State<_UpdateCard> {
+  String _version = '';
+  bool _checking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    currentAppVersion().then((v) {
+      if (mounted) setState(() => _version = v);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return Card(
+      elevation: 0,
+      color: cs.surfaceContainer,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: _checking
+            ? null
+            : () async {
+                setState(() => _checking = true);
+                await manualCheckUpdate(context);
+                if (mounted) setState(() => _checking = false);
+              },
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.system_update_alt_rounded, size: 20, color: cs.onPrimaryContainer),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('检查更新', style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 2),
+                    Text(
+                      _version.isEmpty ? '获取版本中…' : '当前版本 v$_version',
+                      style: textTheme.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+              if (_checking)
+                const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+              else
+                Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

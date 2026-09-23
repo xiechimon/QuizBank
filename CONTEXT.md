@@ -49,6 +49,12 @@
 - **崩溃留痕**：`CrashLogger` 将 FlutterError / 未捕获异步错误 / zone 错误 / 生命周期事件追加写 `getApplicationSupportDirectory()/crash.log`（Windows: `%APPDATA%\com.example\quiz_bank\crash.log`）；`PlatformDispatcher.onError` 返回 true 保 UI isolate 存活。
 - **关联题交互**：见“练习会话·关联题芯片”。
 
+### 自更新
+- **多通道检查**：raw `main/latest.json` 直连 → 镜像轮询（ghfast.top / gh-proxy.com / ghproxy.net）→ GitHub API release 资产；适配无代理网络，全通道失败静默跳过不阻塞启动。
+- **下载与校验**：直连 → 镜像轮询；安装前 SHA256 强制校验（校验和与二进制不同源，防第三方镜像污染），失败删除换通道。
+- **触发**：Windows 启动后每天一次静默检查（`update.lastAutoCheck`）；设置页「检查更新」手动入口。安装走 bat 链：延时 → Inno `/VERYSILENT` → 拉起 `Platform.resolvedExecutable` → 本进程退出。
+- **CI 契约**：tag 构建生成 `latest.json`（version/tag/assetName/url/sha256）+ `SHA256SUMS`，随 Release 上传，且 latest.json 提交回 main（供 raw 镜像通道）。
+
 ## 架构决策（ADR 摘要）
 - **ADR-1 题库增量**：`BankImporter` SHA256(questions.json) 存 `SharedPreferences`，hash 不变跳过，变化则按 `id` upsert 且保留 `phase/timesCorrect/isFavorite`。
 - **ADR-2 考点为调度事实源**：`TopicScheduler.transit` 纯函数（today 注入），`TopicProgress.isSingleRoundPassed` 判定同 `sessionId` 内全对。

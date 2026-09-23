@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'core/error_reporting.dart';
+import 'features/settings/update_checker.dart';
 import 'features/today/today_view.dart';
 import 'features/practice/practice_view.dart';
 import 'features/cards/study_home_view.dart';
@@ -59,6 +61,12 @@ class _RootScaffoldState extends State<RootScaffold> {
       onResume: () => CrashLogger.instance.log('lifecycle', 'resumed'),
       onDetach: () => CrashLogger.instance.log('lifecycle', 'detached'),
     );
+    // 自动更新：启动后静默检查（每天一次，仅 Windows 安装版有静默重装链路）
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && defaultTargetPlatform == TargetPlatform.windows) {
+        autoCheckUpdate(context);
+      }
+    });
   }
 
   @override
