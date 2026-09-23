@@ -42,8 +42,11 @@
 
 ### 速记卡
 - **富文本**：`content` 行级语法 `|` 表格 `·` 列表 `#` 小标题 `【】` 强调。`【】` 橙色高亮，`heading` 不可选，其余可选。
+- **目录树**：速记首页按模块折叠，默认收起只见一级知识点；点模块头展开卡片，点卡片直达该卡详情。展开状态经 `tocExpansionProvider` 持久化（SharedPreferences），跨 tab / 跨重启记忆；筛选激活时自动全展开。
+- **键盘缩放**：详情页 `Ctrl+=` 放大 / `Ctrl+-` 缩小 / `Ctrl+0` 重置，步长 0.1，范围 0.5x~3.0x，作用于 body 的 `MediaQuery.textScaler`，翻页保持，信息行显示当前百分比。
 - **模块切换**：详情页 `MenuAnchor` 17 模块同页切换，页码回 0。
-- **朗读（P2）**：标题喇叭 → `flutter_tts` 中文 → 行级高亮 → 播完翻页续播 → 关联题解析接力 → 断点续播。
+- **朗读（P2）**：标题喇叭 → `flutter_tts` 中文 → 行级高亮 → 播完翻页续播 → 关联题解析接力 → 断点续播。**Windows 门控**：不调 `awaitSpeakCompletion/setQueueMode/getEngines`（flutter_tts 4.2.5 Windows 原生 `FlutterResult` 双重完成缺陷 → 无声退出），完成回调走 `speak.onComplete` 事件 + Dart 侧 30s 超时兜底。
+- **崩溃留痕**：`CrashLogger` 将 FlutterError / 未捕获异步错误 / zone 错误 / 生命周期事件追加写 `getApplicationSupportDirectory()/crash.log`（Windows: `%APPDATA%\com.example\quiz_bank\crash.log`）；`PlatformDispatcher.onError` 返回 true 保 UI isolate 存活。
 - **关联题交互**：见“练习会话·关联题芯片”。
 
 ## 架构决策（ADR 摘要）
