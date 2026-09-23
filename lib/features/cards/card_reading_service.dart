@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../core/error_reporting.dart';
 
 /// TTS 朗读引擎 — 移植 CardReadingService.swift
 /// 固定 zh-CN、默认语速，连续播 texts 数组，驱动 isPlaying/currentIndex
@@ -22,50 +23,38 @@ class CardReadingService extends ChangeNotifier {
   List<String> get texts => List.unmodifiable(_texts);
 
   Future<void> _init() async {
+    // flutter_tts 4.2.5 Windows 原生实现缺陷：awaitSpeakCompletion=true 时把
+    // FlutterResult 存入 speakResult，stop()（play 前必调）与 MediaEnded 回调
+    // 会对其空函数解引用/双重完成 → C++ 未捕获异常 → 进程无声终止。
+    // Windows 上跳过该开关（speak 立即返回，Dart 侧 30s 超时兜底）；
+    // setQueueMode/getEngines 为 Android-only，Windows 走 NotImplemented，同样跳过。
+    final isWindows = defaultTargetPlatform == TargetPlatform.windows;
     try {
-      // [DEBUG-tts-7f3a] 诊断：记录语言可用性与设置结果，定位 emulator 无声
-      try {
-        final avail = await _tts.isLanguageAvailable('zh-CN');
-        print('[DEBUG-tts-7f3a] isLanguageAvailable zh-CN: $avail');
-      } catch (e) {
-        print('[DEBUG-tts-7f3a] isLanguageAvailable error: $e');
-      }
       final langRes = await _tts.setLanguage('zh-CN');
-      print('[DEBUG-tts-7f3a] setLanguage zh-CN result: $langRes');
       if (langRes == 0 || langRes == false) {
-        final fb = await _tts.setLanguage('zh');
-        print('[DEBUG-tts-7f3a] fallback setLanguage zh result: $fb');
+        await _tts.setLanguage('zh');
       }
-      final rateRes = await _tts.setSpeechRate(0.5);
-      print('[DEBUG-tts-7f3a] setSpeechRate 0.5 result: $rateRes');
+      await _tts.setSpeechRate(0.5);
       await _tts.setVolume(1.0);
       await _tts.setPitch(1.0);
-      await _tts.awaitSpeakCompletion(true);
-      print('[DEBUG-tts-7f3a] awaitSpeakCompletion true set');
-      try {
-        await _tts.setQueueMode(1);
-        print('[DEBUG-tts-7f3a] setQueueMode 1 (ADD) set');
-      } catch (e) {
-        print('[DEBUG-tts-7f3a] setQueueMode error: $e');
+      if (!isWindows) {
+        await _tts.awaitSpeakCompletion(true);
+        try {
+          await _tts.setQueueMode(1);
+        } catch (_) {}
+        await _tts.getLanguages;
+        await _tts.getEngines;
       }
-      final langs = await _tts.getLanguages;
-      print('[DEBUG-tts-7f3a] getLanguages: $langs');
-      final engines = await _tts.getEngines;
-      print('[DEBUG-tts-7f3a] getEngines: $engines');
     } catch (e) {
-      print('[DEBUG-tts-7f3a] _init error: $e');
+      await CrashLogger.instance.log('tts-init', e);
     }
     _tts.setCompletionHandler(() {
-      // ignore: avoid_print
-      print('[DEBUG-tts-7f3a] completion handler called index=$_currentIndex');
       if (_speakCompleter != null && !_speakCompleter!.isCompleted) _speakCompleter!.complete();
     });
     _tts.setCancelHandler(() {
-      print('[DEBUG-tts-7f3a] cancel handler _speakCompleter=${_speakCompleter != null} _isPlaying=$_isPlaying');
       // play() 初始的 stop() 会触发一次 cancel，此时新一轮的 _speakCompleter 尚未创建（null），
       // 若此时把 _isPlaying 冲回 false，会导致紧接着的新 speak 被 abort
       if (_speakCompleter == null) {
-        print('[DEBUG-tts-7f3a] cancel from initial stop, ignore');
         return;
       }
       if (!_speakCompleter!.isCompleted) _speakCompleter!.complete();
@@ -73,14 +62,12 @@ class CardReadingService extends ChangeNotifier {
       notifyListeners();
     });
     _tts.setErrorHandler((msg) {
-      print('[DEBUG-tts-7f3a] error handler: $msg');
+      CrashLogger.instance.log('tts-error', msg);
       if (_speakCompleter != null && !_speakCompleter!.isCompleted) _speakCompleter!.completeError(msg);
       _isPlaying = false;
       notifyListeners();
     });
-    _tts.setStartHandler(() {
-      print('[DEBUG-tts-7f3a] start handler index=$_currentIndex text=${_texts.isNotEmpty && _currentIndex < _texts.length ? _texts[_currentIndex].substring(0, _texts[_currentIndex].length.clamp(0,20)) : ""}');
-    });
+    _tts.setStartHandler(() {});
   }
 
   /// 开始播放 texts 数组，每条对应一个 utterance
