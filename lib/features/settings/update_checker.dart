@@ -2,11 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/error_reporting.dart';
 import '../../core/update_service.dart';
-
-const _lastAutoCheckKey = 'update.lastAutoCheck';
 
 /// 当前版本号（package_info 失败时兜底 0.0.0，视为「永远可更新」不阻塞）
 Future<String> currentAppVersion() async {
@@ -18,13 +15,10 @@ Future<String> currentAppVersion() async {
   }
 }
 
-/// 启动静默自动检查：每天至多一次；发现新版才弹窗，通道全灭无感知
+/// 启动静默自动检查：每次进入都查，有新版必弹「立即更新」对话框；
+/// 无新版或通道全灭则完全静默，不阻塞启动
 Future<void> autoCheckUpdate(BuildContext context) async {
   try {
-    final prefs = await SharedPreferences.getInstance();
-    final today = DateTime.now().toIso8601String().substring(0, 10);
-    if (prefs.getString(_lastAutoCheckKey) == today) return;
-    await prefs.setString(_lastAutoCheckKey, today);
     final svc = ProviderScope.containerOf(context).read(updateServiceProvider);
     final info = await svc.checkForUpdate(currentVersion: await currentAppVersion());
     if (info != null && context.mounted) await showUpdateDialog(context, info);
