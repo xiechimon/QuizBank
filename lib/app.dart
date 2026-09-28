@@ -54,55 +54,57 @@ class QuizBankApp extends ConsumerWidget {
           fontFamilyFallback: _chineseFallback,
         ),
         builder: (context, child) {
-          return Shortcuts(
-            shortcuts: <ShortcutActivator, Intent>{
-              // Ctrl/Cmd + = 放大；= 在键盘上常与 + 共键，用 equal 也命中
-              const SingleActivator(LogicalKeyboardKey.equal, control: true):
-                  const _ZoomInIntent(),
-              const SingleActivator(LogicalKeyboardKey.equal, meta: true):
-                  const _ZoomInIntent(),
-              const SingleActivator(LogicalKeyboardKey.add, control: true):
-                  const _ZoomInIntent(),
-              const SingleActivator(LogicalKeyboardKey.add, meta: true):
-                  const _ZoomInIntent(),
-              // Ctrl/Cmd + − 缩小（数字键盘 minus 或常规 minus）
-              const SingleActivator(LogicalKeyboardKey.minus, control: true):
-                  const _ZoomOutIntent(),
-              const SingleActivator(LogicalKeyboardKey.minus, meta: true):
-                  const _ZoomOutIntent(),
-              // Ctrl/Cmd + 0 重置
-              const SingleActivator(LogicalKeyboardKey.digit0, control: true):
-                  const _ZoomResetIntent(),
-              const SingleActivator(LogicalKeyboardKey.digit0, meta: true):
-                  const _ZoomResetIntent(),
-            },
-            child: Actions(
-              actions: <Type, Action<Intent>>{
-                _ZoomInIntent: CallbackAction<_ZoomInIntent>(
-                  onInvoke: (_) {
-                    ref.read(zoomScaleProvider.notifier).zoomIn();
-                    return null;
-                  },
-                ),
-                _ZoomOutIntent: CallbackAction<_ZoomOutIntent>(
-                  onInvoke: (_) {
-                    ref.read(zoomScaleProvider.notifier).zoomOut();
-                    return null;
-                  },
-                ),
-                _ZoomResetIntent: CallbackAction<_ZoomResetIntent>(
-                  onInvoke: (_) {
-                    ref.read(zoomScaleProvider.notifier).reset();
-                    return null;
-                  },
-                ),
+          return MediaQuery(
+            // 整体缩放：文字 + 依赖字号的 Material 组件（Button/Icon/AppBar等）按 scale 重排，
+            // 内联 padding/card width 也随之调整；不触发 window resize
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(scale)),
+            child: Shortcuts(
+              shortcuts: <ShortcutActivator, Intent>{
+                // Ctrl/Cmd + = 放大；= 在键盘上常与 + 共键，用 equal 也命中
+                const SingleActivator(LogicalKeyboardKey.equal, control: true):
+                    const _ZoomInIntent(),
+                const SingleActivator(LogicalKeyboardKey.equal, meta: true):
+                    const _ZoomInIntent(),
+                const SingleActivator(LogicalKeyboardKey.add, control: true):
+                    const _ZoomInIntent(),
+                const SingleActivator(LogicalKeyboardKey.add, meta: true):
+                    const _ZoomInIntent(),
+                // Ctrl/Cmd + − 缩小（数字键盘 minus 或常规 minus）
+                const SingleActivator(LogicalKeyboardKey.minus, control: true):
+                    const _ZoomOutIntent(),
+                const SingleActivator(LogicalKeyboardKey.minus, meta: true):
+                    const _ZoomOutIntent(),
+                // Ctrl/Cmd + 0 重置
+                const SingleActivator(LogicalKeyboardKey.digit0, control: true):
+                    const _ZoomResetIntent(),
+                const SingleActivator(LogicalKeyboardKey.digit0, meta: true):
+                    const _ZoomResetIntent(),
               },
-              child: Focus(
-                autofocus: true,
-                child: Transform.scale(
-                  scale: scale,
-                  alignment: Alignment.topLeft,
-                  child: child,
+              child: Actions(
+                actions: <Type, Action<Intent>>{
+                  _ZoomInIntent: CallbackAction<_ZoomInIntent>(
+                    onInvoke: (_) {
+                      ref.read(zoomScaleProvider.notifier).zoomIn();
+                      return null;
+                    },
+                  ),
+                  _ZoomOutIntent: CallbackAction<_ZoomOutIntent>(
+                    onInvoke: (_) {
+                      ref.read(zoomScaleProvider.notifier).zoomOut();
+                      return null;
+                    },
+                  ),
+                  _ZoomResetIntent: CallbackAction<_ZoomResetIntent>(
+                    onInvoke: (_) {
+                      ref.read(zoomScaleProvider.notifier).reset();
+                      return null;
+                    },
+                  ),
+                },
+                child: Focus(
+                  autofocus: true,
+                  child: child!,
                 ),
               ),
             ),
