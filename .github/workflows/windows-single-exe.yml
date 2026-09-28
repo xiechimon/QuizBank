@@ -29,6 +29,18 @@ jobs:
       - name: Build Windows Release
         run: flutter build windows --release
 
+      - name: 注入版本号到 Inno Setup 配置
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $ver = "${{ github.ref_name }}".TrimStart('v')
+          $issPath = "windows/installer.iss"
+          $pattern = '^#define MyAppVersion ".*"$'
+          $replacement = '#define MyAppVersion "' + $ver + '"'
+          (Get-Content $issPath) -replace $pattern, $replacement | Set-Content $issPath -Encoding utf8
+          Write-Host "MyAppVersion -> $ver"
+          Select-String -Path $issPath -Pattern 'MyAppVersion'
+
       - name: Build 单文件安装包 (Inno Setup)
         uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
         with:
