@@ -1,12 +1,28 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/error_reporting.dart';
 import 'features/settings/update_checker.dart';
+import 'features/settings/zoom_controller.dart';
 import 'features/today/today_view.dart';
 import 'features/practice/practice_view.dart';
 import 'features/cards/study_home_view.dart';
 import 'features/stats/stats_view.dart';
-class QuizBankApp extends StatelessWidget {
+
+class _ZoomInIntent extends Intent {
+  const _ZoomInIntent();
+}
+
+class _ZoomOutIntent extends Intent {
+  const _ZoomOutIntent();
+}
+
+class _ZoomResetIntent extends Intent {
+  const _ZoomResetIntent();
+}
+
+class QuizBankApp extends ConsumerWidget {
   const QuizBankApp({super.key});
 
   static const _chineseFallback = [
@@ -20,7 +36,8 @@ class QuizBankApp extends StatelessWidget {
   ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final scale = ref.watch(zoomScaleProvider);
     return MaterialApp(
         title: 'QuizBank',
         theme: ThemeData(
@@ -36,6 +53,61 @@ class QuizBankApp extends StatelessWidget {
           ),
           fontFamilyFallback: _chineseFallback,
         ),
+        builder: (context, child) {
+          return Shortcuts(
+            shortcuts: <ShortcutActivator, Intent>{
+              // Ctrl/Cmd + = 放大；= 在键盘上常与 + 共键，用 equal 也命中
+              const SingleActivator(LogicalKeyboardKey.equal, control: true):
+                  const _ZoomInIntent(),
+              const SingleActivator(LogicalKeyboardKey.equal, meta: true):
+                  const _ZoomInIntent(),
+              const SingleActivator(LogicalKeyboardKey.add, control: true):
+                  const _ZoomInIntent(),
+              const SingleActivator(LogicalKeyboardKey.add, meta: true):
+                  const _ZoomInIntent(),
+              // Ctrl/Cmd + − 缩小（数字键盘 minus 或常规 minus）
+              const SingleActivator(LogicalKeyboardKey.minus, control: true):
+                  const _ZoomOutIntent(),
+              const SingleActivator(LogicalKeyboardKey.minus, meta: true):
+                  const _ZoomOutIntent(),
+              // Ctrl/Cmd + 0 重置
+              const SingleActivator(LogicalKeyboardKey.digit0, control: true):
+                  const _ZoomResetIntent(),
+              const SingleActivator(LogicalKeyboardKey.digit0, meta: true):
+                  const _ZoomResetIntent(),
+            },
+            child: Actions(
+              actions: <Type, Action<Intent>>{
+                _ZoomInIntent: CallbackAction<_ZoomInIntent>(
+                  onInvoke: (_) {
+                    ref.read(zoomScaleProvider.notifier).zoomIn();
+                    return null;
+                  },
+                ),
+                _ZoomOutIntent: CallbackAction<_ZoomOutIntent>(
+                  onInvoke: (_) {
+                    ref.read(zoomScaleProvider.notifier).zoomOut();
+                    return null;
+                  },
+                ),
+                _ZoomResetIntent: CallbackAction<_ZoomResetIntent>(
+                  onInvoke: (_) {
+                    ref.read(zoomScaleProvider.notifier).reset();
+                    return null;
+                  },
+                ),
+              },
+              child: Focus(
+                autofocus: true,
+                child: Transform.scale(
+                  scale: scale,
+                  alignment: Alignment.topLeft,
+                  child: child,
+                ),
+              ),
+            ),
+          );
+        },
         home: const RootScaffold(),
       );
   }
@@ -61,7 +133,7 @@ class _RootScaffoldState extends State<RootScaffold> {
       onResume: () => CrashLogger.instance.log('lifecycle', 'resumed'),
       onDetach: () => CrashLogger.instance.log('lifecycle', 'detached'),
     );
-    // 自动更新：启动后静默检查（每天一次，仅 Windows 安装版有静默重装链路）
+    // 自动更新：启动后静默检查（每次进入都查，仅 Windows 安装版有静默重装链路）
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && defaultTargetPlatform == TargetPlatform.windows) {
         autoCheckUpdate(context);
