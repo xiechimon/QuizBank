@@ -1,8 +1,8 @@
 {
-  "assetName": "QuizBank-Setup-1.2.3-x64.exe",
-  "sha256": "ae2a543f3eef6139d8931ff9c33d05187ddbfb95394ff2f1c2ef5d52d71f6ba4",
-  "url": "https://github.com/xiechimon/QuizBank/releases/download/v1.3.0/QuizBank-Setup-1.2.3-x64.exe",
-  "version": "1.3.0",
-  "tag": "v1.3.0",
-  "notes": ""
+  "sha256": "13e39b2c376998bd716129b1d48b9a08d72fa5ecf1daa60c38a67189a39f4da0",
+  "notes": "",
+  "assetName": "QuizBank-Setup-1.3.1-x64.exe",
+  "version": "1.3.1",
+  "tag": "v1.3.1",
+  "url": "https://github.com/xiechimon/QuizBank/releases/download/v1.3.1/QuizBank-Setup-1.3.1-x64.exe"
 }
